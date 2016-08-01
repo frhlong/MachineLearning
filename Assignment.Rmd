@@ -1,0 +1,78 @@
+---
+title: "Practical Machine Learning"
+author: "Francis"
+date: "1 August 2016"
+output: html_document
+---
+#Introduction
+This project aims to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways (under variable `classe`):`A`,`B`,`C`,`D`,`E`.
+#Data Cleaning
+We first import the data and explore the type of the data 
+```{r}
+training<-read.csv('training.csv')
+testing<-read.csv('testing.csv')
+str(training)
+```
+
+It is clear that many variables have largely missing value, and one number consistently pops out is 19216 which is exactly the number of missing records in 106 variables. We will exclude these variables from both train and test dataset
+
+```{r}
+training<-training[,-c(1:6,12:36,50:59,69:83,87:101)]
+training<-training[,-c(32:41,54:68,70:79)]
+testing<-testing[,-c(1:6,12:36,50:59,69:83,87:101)]
+testing<-testing[,-c(32:41,54:68,70:79)]
+```
+
+Note that the training and testing data have been prepared for us so we can go ahead with the predictive modelling
+
+#Predictive Modeling
+Due the large dataset, we should start with simple model first. `lda` is chosen to be the first to be selected due to short running time
+
+```{r}
+library(caret)
+ldaModel<-train(classe~., data=training,method='lda')
+ldaModel
+```
+The result is actually not too bad, the accuracy is 0.71 and Kappa coefficient is 0.633, reflecting good predictive model.
+
+We will not dwell further the performance analysis of predictive model until we shortlist good model candidate. Note that the reported accuracy from the research paper was 0.99 which suggests that we shortlisted model should perform no less than 0.9 accuracy.
+
+The next model to consider is Naive Bayes. 
+
+```{r,, echo=FALSE,message=FALSE,warning=FALSE}
+nbModel<-train(classe~., method="nb", data=training,
+               tuneGrid=data.frame(.fL=1, .usekernel=FALSE),
+               trControl=trainControl(method="cv", 5))
+```
+
+The model fared much worse than lda with accuracy of 0.506, which definitely did not make the cut
+
+The third model is tree-based model as it is praised to be superior to many other models though it is prone to overfitiing. Few ways to avoid this phenomina is to carry out cross validation 
+
+```{r}
+rpartModel<-train(classe~., method="rpart",data=training,
+                  tuneGrid=expand.grid(cp=seq(0, 0.05, 0.005)),
+                  trControl=trainControl(method="cv", 2))
+
+```
+The result is excellent: 0.95. Let use this model to assess further the predictive model.
+
+#Model diagnosis
+```{r}
+confusionMatrix(training$classe, predict(rpartModel, training))
+```
+
+The fitted model on training dataset produces even better overall accuracy of 0.9793, with the balanced Accuracy of each other class is consistently better than 0.98.
+
+#Predict new data
+Quick look at testing dataset reveals the last column is indeed the id of record which should be excluded from data when we predict
+```{r}
+predict(rpartModel,testing[,-54])
+```
+
+#Appendix
+##Variable importance
+```{r}
+varImp(rpartModel)
+```
+
